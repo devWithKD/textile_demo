@@ -1,0 +1,232 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String      @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  email              String      @unique
+  hashedPassword     String
+  role               Role        @default(USER)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  orders             Order[]
+  createdWorkOrders  WorkOrder[] @relation("createdBy")
+  assignedWorkOrders WorkOrder[] @relation("assignedTo")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  USER
+}
+
+model Material {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  type               String
+  unit               String
+  currentStock       Float
+  reorderLevel       Float
+  price              Float
+  description        String?
+  supplierId         String              @db.ObjectId
+  supplier           Supplier            @relation(fields: [supplierId], references: [id])
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  workOrderMaterials WorkOrderMaterial[]
+}
+
+model Supplier {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  materials   Material[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  orders      Order[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Product {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  name              String
+  sku               String             @unique
+  description       String?
+  category          String
+  basePrice         Float
+  currentStock      Int                @default(0)
+  imageUrl          String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  orderItems        OrderItem[]
+  workOrderProducts WorkOrderProduct[]
+}
+
+model Order {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber  String      @unique
+  customerId   String      @db.ObjectId
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  orderDate    DateTime    @default(now())
+  deliveryDate DateTime?
+  status       OrderStatus @default(PENDING)
+  totalAmount  Float
+  items        OrderItem[]
+  createdById  String      @db.ObjectId
+  createdBy    User        @relation(fields: [createdById], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  workOrders   WorkOrder[]
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  orderId    String  @db.ObjectId
+  order      Order   @relation(fields: [orderId], references: [id])
+  productId  String  @db.ObjectId
+  product    Product @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Float
+  totalPrice Float
+}
+
+model WorkOrder {
+  id              String              @id @default(auto()) @map("_id") @db.ObjectId
+  workOrderNumber String              @unique
+  description     String?
+  startDate       DateTime
+  dueDate         DateTime
+  status          WorkOrderStatus     @default(PLANNED)
+  orderId         String?             @db.ObjectId
+  order           Order?              @relation(fields: [orderId], references: [id])
+  createdById     String              @db.ObjectId
+  createdBy       User                @relation("createdBy", fields: [createdById], references: [id])
+  assignedToId    String?             @db.ObjectId
+  assignedTo      User?               @relation("assignedTo", fields: [assignedToId], references: [id])
+  materials       WorkOrderMaterial[]
+  products        WorkOrderProduct[]
+  processes       WorkOrderProcess[]
+  qualityChecks   QualityCheck[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model WorkOrderMaterial {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  workOrderId String    @db.ObjectId
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  materialId  String    @db.ObjectId
+  material    Material  @relation(fields: [materialId], references: [id])
+  quantity    Float
+  consumed    Float     @default(0)
+}
+
+model WorkOrderProduct {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  workOrderId      String    @db.ObjectId
+  workOrder        WorkOrder @relation(fields: [workOrderId], references: [id])
+  productId        String    @db.ObjectId
+  product          Product   @relation(fields: [productId], references: [id])
+  plannedQuantity  Int
+  producedQuantity Int       @default(0)
+}
+
+model WorkOrderProcess {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  workOrderId String        @db.ObjectId
+  workOrder   WorkOrder     @relation(fields: [workOrderId], references: [id])
+  processType ProcessType
+  machine     String?
+  startTime   DateTime?
+  endTime     DateTime?
+  status      ProcessStatus @default(PENDING)
+  notes       String?
+}
+
+enum ProcessType {
+  SPINNING
+  WEAVING
+  DYEING
+  PRINTING
+  FINISHING
+  INSPECTION
+  PACKAGING
+}
+
+enum ProcessStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model QualityCheck {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  workOrderId String    @db.ObjectId
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  checkpoint  String
+  passed      Boolean
+  notes       String?
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model MachineInfo {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  type            String
+  status          MachineStatus @default(OPERATIONAL)
+  capacity        Int
+  location        String?
+  lastMaintenance DateTime?
+  nextMaintenance DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+enum MachineStatus {
+  OPERATIONAL
+  MAINTENANCE
+  REPAIR
+  OFFLINE
+}
